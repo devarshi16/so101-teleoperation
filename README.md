@@ -10,6 +10,12 @@ SO-101 teleoperation, demonstration collection, and deformable-cloth tasks for N
 
 The Python code is stored in this repository. The large robot USD files, scene assets, textures, and HDRIs are **not duplicated**: `third_party/Sim-to-Real-SO-101-Workshop` is a Git submodule pinned to NVIDIA's original [Sim-to-Real SO-101 Workshop](https://github.com/isaac-sim/Sim-to-Real-SO-101-Workshop).
 
+## Cube-to-box replay
+
+![SO-101 cube-to-box teleoperation replay](media/so101_cube_box_replay.gif)
+
+This animation is rendered from a successful HDF5 teleoperation episode. The source HDF5 remains outside this repository; only the compact GIF is versioned here.
+
 ## Tested configuration
 
 This checkout was validated with the following local stack:
@@ -159,6 +165,26 @@ controller_agent \
 
 Use `--debug_controller` to print the input and joint targets once per second.
 
+### Replay an HDF5 episode
+
+`render_hdf5_replay` restores the recorded initial robot and object state, replays the saved actions in Isaac Sim, and writes a sampled MP4. The task ID is read from the HDF5 metadata unless `--task` is supplied explicitly.
+
+```bash
+render_hdf5_replay \
+  --dataset_file "$(pwd)/outputs/cube_box/run_001/episodes.hdf5" \
+  --episode 0 \
+  --output "$(pwd)/outputs/cube_box/run_001/replay.mp4" \
+  --start_frame 0 \
+  --frame_stride 20 \
+  --fps 20 \
+  --width 960 \
+  --height 540 \
+  --device cuda:0 \
+  --viz none
+```
+
+Use `--end_frame` to stop at a particular recorded action. Smaller `--frame_stride` values produce smoother, larger videos.
+
 ### Gamepad: cloth demonstration collection
 
 Choose a short task ID and an output directory. The corresponding Isaac Gym environment ID is selected automatically.
@@ -244,7 +270,7 @@ third_party/Sim-to-Real-SO-101-Workshop/  pinned upstream asset submodule
 docs/cloth_pipeline.md              cloth workflow reference
 ```
 
-Generated datasets, videos, model checkpoints, logs, caches, and HDF5 files are ignored by Git.
+Generated datasets, MP4 files, model checkpoints, logs, caches, and HDF5 files are ignored by Git. The compact README demo GIF is the only recorded media intentionally versioned.
 
 ## Updating the upstream assets
 

@@ -9,6 +9,7 @@ description = "SO-101 teleoperation and cloth-manipulation tasks for NVIDIA Isaa
 requires-python = ">=3.11"
 dependencies = [
     "evdev>=1.6; sys_platform == 'linux'",
+    "imageio[ffmpeg]>=2.34",
     "prettytable>=3.0",
     "psutil",
 ]
@@ -24,6 +25,7 @@ cloth_mimic_expand = "sim_to_real_so101.scripts.cloth_mimic_expand:main"
 train_cloth_act = "sim_to_real_so101.scripts.train_cloth_act:main"
 lerobot_eval = "sim_to_real_so101.scripts.lerobot_eval:main"
 lerobot_push_dataset = "sim_to_real_so101.scripts.lerobot_push_dataset:main"
+render_hdf5_replay = "sim_to_real_so101.scripts.render_hdf5_replay:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
