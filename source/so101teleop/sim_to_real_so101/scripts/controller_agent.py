@@ -4,24 +4,54 @@
 """Controller teleop for the SO101 cube-to-box task."""
 
 import argparse
+import json
 import os
 import time
 import traceback
 
 from isaaclab.app import AppLauncher
 
+JOINT_TASK = "Lerobot-So101-Controller-Cube-Box"
+IK_TASK = "Lerobot-So101-Controller-Cube-Box-IK"
+
 parser = argparse.ArgumentParser(description="SO101 gamepad/controller teleop with HDF5 success recording.")
 parser.add_argument("--disable_fabric", action="store_true", default=False)
 parser.add_argument("--num_envs", type=int, default=1)
-parser.add_argument("--task", type=str, default="Lerobot-So101-Controller-Cube-Box")
-parser.add_argument("--dataset_file", type=str, default="datasets/so101_cube_box_controller.hdf5")
-parser.add_argument("--controller_device", type=str, default=None, help="Optional evdev path, e.g. /dev/input/by-id/...-event-joystick")
+parser.add_argument("--task", type=str, default=JOINT_TASK)
+parser.add_argument(
+    "--control_mode",
+    choices=("joint", "ik"),
+    default="joint",
+    help="Joint-rate control (default) or relative Cartesian damped-least-squares IK.",
+)
+parser.add_argument("--dataset_file", type=str, default=None)
+parser.add_argument(
+    "--controller_device",
+    type=str,
+    default=None,
+    help="Optional evdev path, e.g. /dev/input/by-id/...-event-joystick",
+)
 parser.add_argument("--seed", type=int, default=101)
 parser.add_argument("--joint_rate", type=float, default=0.75, help="Radians/sec for stick-driven joints.")
 parser.add_argument("--gripper_rate", type=float, default=1.2, help="Radians/sec for trigger/button-driven gripper.")
-parser.add_argument("--debug_controller", action="store_true", help="Print controller loop diagnostics once per second.")
+parser.add_argument("--ik_position_rate", type=float, default=0.12, help="IK translation speed in meters/sec.")
+parser.add_argument("--ik_rotation_rate", type=float, default=1.2, help="IK rotation speed in radians/sec.")
+parser.add_argument(
+    "--debug_controller",
+    action="store_true",
+    help="Print controller loop diagnostics once per second.",
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+if args_cli.task == IK_TASK:
+    args_cli.control_mode = "ik"
+elif args_cli.control_mode == "ik" and args_cli.task == JOINT_TASK:
+    args_cli.task = IK_TASK
+elif args_cli.control_mode == "ik":
+    parser.error(f"IK mode currently supports --task {IK_TASK!r}; received {args_cli.task!r}.")
+if args_cli.dataset_file is None:
+    suffix = "_ik" if args_cli.control_mode == "ik" else ""
+    args_cli.dataset_file = f"datasets/so101_cube_box_controller{suffix}.hdf5"
 args_cli.enable_cameras = False
 
 app_launcher = AppLauncher(args_cli)
@@ -111,7 +141,9 @@ class EvdevController:
                     print(f"[WARNING]: Could not exclusively grab controller {dev.path}: {exc}")
                 os.set_blocking(dev.fd, False)
                 self.device = dev
-                self.abs_info = {code: info for code, info in dev.capabilities(absinfo=True).get(self.ecodes.EV_ABS, [])}
+                self.abs_info = {
+                    code: info for code, info in dev.capabilities(absinfo=True).get(self.ecodes.EV_ABS, [])
+                }
                 self.axes = {code: info.value for code, info in self.abs_info.items()}
                 print(f"[INFO]: Controller device: {dev.path} ({dev.name})")
                 return
@@ -137,11 +169,11 @@ class EvdevController:
             return 0.0
         return max(-1.0, min(1.0, value))
 
-    def poll(self) -> torch.Tensor:
+    def poll(self, control_mode: str = "joint") -> torch.Tensor:
         if self.device is None:
             if time.monotonic() - self.last_scan_time > 1.0:
                 self._connect()
-            return torch.zeros(6)
+            return torch.zeros(7 if control_mode == "ik" else 6)
         try:
             events = list(self.device.read())
         except BlockingIOError:
@@ -149,7 +181,7 @@ class EvdevController:
         except OSError as exc:
             print(f"[WARNING]: Lost controller device {self.device.path}: {exc}")
             self.close()
-            return torch.zeros(6)
+            return torch.zeros(7 if control_mode == "ik" else 6)
         for event in events:
             if event.type == self.ecodes.EV_ABS:
                 self.axes[event.code] = event.value
@@ -160,6 +192,20 @@ class EvdevController:
                     self.buttons.discard(event.code)
 
         e = self.ecodes
+        if control_mode == "ik":
+            command = torch.zeros(7, dtype=torch.float32)
+            # Base-frame translation: left-stick vertical/horizontal -> X/Y; D-pad up/down -> Z.
+            command[0] = -self._axis_value(e.ABS_Y)
+            command[1] = -self._axis_value(e.ABS_X)
+            command[2] = -self._axis_value(e.ABS_HAT0Y)
+            # Axis-angle rotation: D-pad left/right -> roll; right-stick vertical/horizontal -> pitch/yaw.
+            command[3] = self._axis_value(e.ABS_HAT0X)
+            command[4] = -self._axis_value(e.ABS_RY)
+            command[5] = self._axis_value(e.ABS_RX)
+            # R1 closes and L1 opens the jaw.
+            command[6] = float(e.BTN_TR in self.buttons) - float(e.BTN_TL in self.buttons)
+            return command
+
         command = torch.zeros(6, dtype=torch.float32)
         command[0] = self._axis_value(e.ABS_X)
         command[1] = -self._axis_value(e.ABS_Y)
@@ -187,14 +233,31 @@ def _episode_add_state(episode: EpisodeData, env, obs: dict):
     episode.add("states/cube/root_pose", obs["object"]["cube_pose"][0].detach().cpu())
 
 
-def _open_dataset(path: str, task: str) -> HDF5DatasetFileHandler:
+def _open_dataset(path: str, task: str, control_mode: str) -> HDF5DatasetFileHandler:
     path = os.path.abspath(path)
     handler = HDF5DatasetFileHandler()
     if os.path.exists(path):
+        import h5py
+
+        with h5py.File(path, "r") as stream:
+            metadata = json.loads(stream["data"].attrs.get("env_args", "{}"))
+        existing_task = metadata.get("task") or metadata.get("env_name")
+        if existing_task and existing_task != task:
+            raise ValueError(
+                f"Dataset {path!r} belongs to task {existing_task!r}, not {task!r}. "
+                "Choose another --dataset_file to avoid mixing joint and IK actions."
+            )
         handler.open(path, "r+")
     else:
         handler.create(path, env_name=task)
-    handler.add_env_args({"task": task, "teleop": "evdev_controller", "format": "isaaclab_episode_data"})
+    handler.add_env_args(
+        {
+            "task": task,
+            "teleop": "evdev_controller",
+            "control_mode": control_mode,
+            "format": "isaaclab_episode_data",
+        }
+    )
     return handler
 
 
@@ -218,15 +281,21 @@ def main():
     )
     env_cfg.seed = args_cli.seed
     env = gym.make(args_cli.task, cfg=env_cfg)
+    print(f"[INFO]: Control mode: {args_cli.control_mode} ({args_cli.task})")
+    if args_cli.control_mode == "ik":
+        print("[INFO]: IK: left stick X/Y · D-pad up/down Z · right stick pitch/yaw")
+        print("[INFO]: IK: D-pad left/right roll · L1 open · R1 close")
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
 
     os.makedirs(os.path.dirname(args_cli.dataset_file) or ".", exist_ok=True)
     controller = EvdevController(args_cli.controller_device)
-    dataset = _open_dataset(args_cli.dataset_file, args_cli.task)
+    dataset = _open_dataset(args_cli.dataset_file, args_cli.task, args_cli.control_mode)
 
     obs, _ = env.reset()
     targets = obs["policy"]["joint_pos_obs"].clone().to(env.unwrapped.device)
+    ik_actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
+    gripper_target = targets[:, 5:6].clone()
     episode = EpisodeData()
     episode.seed = args_cli.seed
     episode.env_id = 0
@@ -243,15 +312,25 @@ def main():
                 now = time.monotonic()
                 dt = min(max(now - last_time, 1.0 / 240.0), 1.0 / 15.0)
                 last_time = now
-                command = controller.poll().to(env.unwrapped.device)
-                targets[:, :5] += command[:5].unsqueeze(0) * args_cli.joint_rate * dt
-                targets[:, 5] += command[5] * args_cli.gripper_rate * dt
+                command = controller.poll(args_cli.control_mode).to(env.unwrapped.device)
                 limits = JOINT_LIMITS.to(env.unwrapped.device)
-                targets[:] = torch.max(torch.min(targets, limits[:, 1]), limits[:, 0])
+                if args_cli.control_mode == "joint":
+                    targets[:, :5] += command[:5].unsqueeze(0) * args_cli.joint_rate * dt
+                    targets[:, 5] += command[5] * args_cli.gripper_rate * dt
+                    targets[:] = torch.max(torch.min(targets, limits[:, 1]), limits[:, 0])
+                    applied_action = targets
+                else:
+                    ik_actions.zero_()
+                    ik_actions[:, :3] = command[:3].unsqueeze(0) * args_cli.ik_position_rate * dt
+                    ik_actions[:, 3:6] = command[3:6].unsqueeze(0) * args_cli.ik_rotation_rate * dt
+                    gripper_target += command[6] * args_cli.gripper_rate * dt
+                    gripper_target.clamp_(limits[5, 0], limits[5, 1])
+                    ik_actions[:, 6:7] = gripper_target
+                    applied_action = ik_actions
 
-                obs, _, terminated, truncated, _ = env.step(targets)
+                obs, _, terminated, truncated, _ = env.step(applied_action)
                 step_count += 1
-                episode.add("actions", targets[0].detach().cpu())
+                episode.add("actions", applied_action[0].detach().cpu())
                 _episode_add_obs(episode, obs)
                 _episode_add_state(episode, env, obs)
 
@@ -263,7 +342,8 @@ def main():
                         f"app_running={simulation_app.is_running()} "
                         f"app_exiting={simulation_app.is_exiting()} "
                         f"command={command.tolist()} "
-                        f"target={targets[0].detach().cpu().tolist()} "
+                        f"mode={args_cli.control_mode} "
+                        f"target={applied_action[0].detach().cpu().tolist()} "
                         f"success={success} "
                         f"terminated={terminated.detach().cpu().tolist()} "
                         f"truncated={truncated.detach().cpu().tolist()} "
@@ -279,6 +359,7 @@ def main():
                     print(f"[INFO]: Success episode saved to {os.path.abspath(args_cli.dataset_file)}")
                     obs, _ = env.reset()
                     targets = obs["policy"]["joint_pos_obs"].clone().to(env.unwrapped.device)
+                    gripper_target = targets[:, 5:6].clone()
                     episode = EpisodeData()
                     episode.seed = args_cli.seed
                     episode.env_id = 0
@@ -286,6 +367,7 @@ def main():
                     print("[INFO]: Episode timed out without success; not saved.")
                     obs, _ = env.reset()
                     targets = obs["policy"]["joint_pos_obs"].clone().to(env.unwrapped.device)
+                    gripper_target = targets[:, 5:6].clone()
                     episode = EpisodeData()
                     episode.seed = args_cli.seed
                     episode.env_id = 0

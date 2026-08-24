@@ -3,6 +3,8 @@
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
+from isaaclab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
+from isaaclab.envs.mdp.actions.actions_cfg import DifferentialInverseKinematicsActionCfg, JointPositionActionCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
@@ -150,6 +152,30 @@ class CubeBoxTerminationsCfg:
 
 
 @configclass
+class CubeBoxIKActionsCfg:
+    """Relative end-effector IK plus an absolute jaw-position target."""
+
+    arm_action: DifferentialInverseKinematicsActionCfg = DifferentialInverseKinematicsActionCfg(
+        asset_name="robot",
+        joint_names=["Rotation", "Pitch", "Elbow", "Wrist_Pitch", "Wrist_Roll"],
+        body_name="gripper",
+        controller=DifferentialIKControllerCfg(
+            command_type="pose",
+            use_relative_mode=True,
+            ik_method="dls",
+            ik_params={"lambda_val": 0.05},
+        ),
+        scale=1.0,
+    )
+    gripper_action: JointPositionActionCfg = JointPositionActionCfg(
+        asset_name="robot",
+        joint_names=["Jaw"],
+        scale=1.0,
+        use_default_offset=False,
+    )
+
+
+@configclass
 class SO101CubeBoxTeleopEnvCfg(SO101TeleopEnvCfg):
     scene: SO101CubeBoxSceneCfg = SO101CubeBoxSceneCfg()
     observations: CubeBoxObservationsCfg = CubeBoxObservationsCfg()
@@ -162,3 +188,10 @@ class SO101CubeBoxTeleopEnvCfg(SO101TeleopEnvCfg):
         self.episode_length_s = 60
         self.viewer.eye = (-0.12, -0.55, 0.42)
         self.viewer.lookat = (0.16, 0.05, 0.08)
+
+
+@configclass
+class SO101CubeBoxIKTeleopEnvCfg(SO101CubeBoxTeleopEnvCfg):
+    """Cube-to-box task controlled by relative Cartesian IK commands."""
+
+    actions: CubeBoxIKActionsCfg = CubeBoxIKActionsCfg()

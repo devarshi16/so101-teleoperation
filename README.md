@@ -165,6 +165,30 @@ controller_agent \
 
 Use `--debug_controller` to print the input and joint targets once per second.
 
+#### Alternate Cartesian IK mode
+
+Joint-rate control remains the default, so existing commands and datasets keep their current behavior. Add `--control_mode ik` to switch to relative Cartesian damped-least-squares IK; this automatically selects the `Lerobot-So101-Controller-Cube-Box-IK` task and uses a separate default HDF5 filename.
+
+```bash
+controller_agent \
+  --control_mode ik \
+  --dataset_file "$(pwd)/outputs/cube_box_ik/run_001/episodes.hdf5" \
+  --controller_device /dev/input/by-id/YOUR-GAMEPAD-event-joystick \
+  --device cuda:0 \
+  --viz kit
+```
+
+IK bindings:
+
+- Left stick up/down: end-effector X translation.
+- Left stick left/right: end-effector Y translation.
+- D-pad up/down: end-effector Z translation.
+- Right stick up/down: pitch; right stick left/right: yaw.
+- D-pad left/right: roll.
+- `L1`: open gripper; `R1`: close gripper.
+
+Use `--ik_position_rate` and `--ik_rotation_rate` to tune translation and rotation speed. The SO-101 arm has five arm joints, so the 6-DoF command is solved in a damped least-squares sense and may prioritize a best-fit motion near workspace limits. The explicit task tag `--task Lerobot-So101-Controller-Cube-Box-IK` also activates IK mode.
+
 ### Replay an HDF5 episode
 
 `render_hdf5_replay` restores the recorded initial robot and object state, replays the saved actions in Isaac Sim, and writes a sampled MP4. The task ID is read from the HDF5 metadata unless `--task` is supplied explicitly. This repository includes one successful 5,004-action episode, so the command below works immediately after installation:
@@ -231,6 +255,7 @@ A confirmed task success saves and resets automatically. Failed takes time out a
 | Vials evaluation | `Lerobot-So101-Teleop-Vials-To-Rack-Eval` |
 | Vials evaluation + domain randomization | `Lerobot-So101-Teleop-Vials-To-Rack-DR-Eval` |
 | Gamepad cube to box | `Lerobot-So101-Controller-Cube-Box` |
+| Gamepad cube to box (IK) | `Lerobot-So101-Controller-Cube-Box-IK` |
 | Cloth corner lift | `corner_lift` -> `SO101-Cloth-Corner-Lift-v0` |
 | Cloth edge drag | `edge_drag` -> `SO101-Cloth-Edge-Drag-v0` |
 | Cloth corner fold | `corner_fold` -> `SO101-Cloth-Corner-Fold-v0` |

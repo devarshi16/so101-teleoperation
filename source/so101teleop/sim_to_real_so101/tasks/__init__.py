@@ -104,6 +104,15 @@ gym.register(
     },
 )
 
+gym.register(
+    id="Lerobot-So101-Controller-Cube-Box-IK",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.cube_box_env_cfg:SO101CubeBoxIKTeleopEnvCfg",
+    },
+)
+
 
 _CLOTH_TASK_CONFIGS = {
     "SO101-Cloth-Corner-Lift-v0": "SO101ClothCornerLiftEnvCfg",
