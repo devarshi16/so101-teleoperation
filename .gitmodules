@@ -1,0 +1,3 @@
+[submodule "third_party/Sim-to-Real-SO-101-Workshop"]
+	path = third_party/Sim-to-Real-SO-101-Workshop
+	url = https://github.com/isaac-sim/Sim-to-Real-SO-101-Workshop.git

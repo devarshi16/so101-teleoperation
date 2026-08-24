@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sim_to_real_so101"
+version = "0.1.0"
+description = "SO-101 teleoperation and cloth-manipulation tasks for NVIDIA Isaac Lab"
+requires-python = ">=3.11"
+dependencies = [
+    "evdev>=1.6; sys_platform == 'linux'",
+    "prettytable>=3.0",
+    "psutil",
+]
+
+[project.scripts]
+list_envs = "sim_to_real_so101.scripts.list_envs:main"
+zero_agent = "sim_to_real_so101.scripts.zero_agent:main"
+random_agent = "sim_to_real_so101.scripts.random_agent:main"
+lerobot_agent = "sim_to_real_so101.scripts.lerobot_agent:main"
+controller_agent = "sim_to_real_so101.scripts.controller_agent:main"
+cloth_controller_collect = "sim_to_real_so101.scripts.cloth_controller_collect:main"
+cloth_mimic_expand = "sim_to_real_so101.scripts.cloth_mimic_expand:main"
+train_cloth_act = "sim_to_real_so101.scripts.train_cloth_act:main"
+lerobot_eval = "sim_to_real_so101.scripts.lerobot_eval:main"
+lerobot_push_dataset = "sim_to_real_so101.scripts.lerobot_push_dataset:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sim_to_real_so101*"]
