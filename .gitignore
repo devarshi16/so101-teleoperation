@@ -18,10 +18,10 @@ outputs/
 logs/
 tmp/
 *.hdf5
+!examples/data/*.hdf5
 *.mp4
 
 # Isaac Sim / Kit runtime state
 kit/cache/
 kit/logs/
 docker/env/
-

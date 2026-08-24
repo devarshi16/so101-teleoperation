@@ -47,9 +47,8 @@ class SO101CubeBoxSceneCfg(LerobotSo101BaseSceneCfg):
     cube = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/Cube",
         init_state=RigidObjectCfg.InitialStateCfg(pos=(0.22, -0.08, CUBE_Z), rot=(0.0, 0.0, 0.0, 1.0)),
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/blue_block.usd",
-            scale=(1.0, 1.0, 1.0),
+        spawn=sim_utils.CuboidCfg(
+            size=(0.05, 0.05, 0.05),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 solver_position_iteration_count=16,
                 solver_velocity_iteration_count=1,
@@ -57,6 +56,12 @@ class SO101CubeBoxSceneCfg(LerobotSo101BaseSceneCfg):
                 disable_gravity=False,
             ),
             mass_props=sim_utils.MassPropertiesCfg(mass=0.035),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=(0.03, 0.35, 1.0),
+                emissive_color=(0.0, 0.025, 0.10),
+                roughness=0.65,
+            ),
         ),
     )
 
@@ -68,6 +73,16 @@ class SO101CubeBoxSceneCfg(LerobotSo101BaseSceneCfg):
             rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True, disable_gravity=True),
             collision_props=sim_utils.CollisionPropertiesCfg(),
         ),
+    )
+
+    dome_light = AssetBaseCfg(
+        prim_path="/World/CubeBoxDomeLight",
+        spawn=sim_utils.DomeLightCfg(intensity=1800.0, color=(0.95, 0.97, 1.0)),
+    )
+
+    key_light = AssetBaseCfg(
+        prim_path="/World/CubeBoxKeyLight",
+        spawn=sim_utils.DistantLightCfg(intensity=600.0, color=(1.0, 0.90, 0.78), angle=1.0),
     )
 
 

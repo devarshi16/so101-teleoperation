@@ -14,7 +14,7 @@ The Python code is stored in this repository. The large robot USD files, scene a
 
 ![SO-101 cube-to-box teleoperation replay](media/so101_cube_box_replay.gif)
 
-This animation is rendered from a successful HDF5 teleoperation episode. The source HDF5 remains outside this repository; only the compact GIF is versioned here.
+This animation is rendered from the successful example episode at [`examples/data/so101_cube_box_controller.hdf5`](examples/data/so101_cube_box_controller.hdf5). The replay scene uses neutral fill and key lighting plus a high-contrast blue cube so the object remains visible against the table and box.
 
 ## Tested configuration
 
@@ -167,14 +167,14 @@ Use `--debug_controller` to print the input and joint targets once per second.
 
 ### Replay an HDF5 episode
 
-`render_hdf5_replay` restores the recorded initial robot and object state, replays the saved actions in Isaac Sim, and writes a sampled MP4. The task ID is read from the HDF5 metadata unless `--task` is supplied explicitly.
+`render_hdf5_replay` restores the recorded initial robot and object state, replays the saved actions in Isaac Sim, and writes a sampled MP4. The task ID is read from the HDF5 metadata unless `--task` is supplied explicitly. This repository includes one successful 5,004-action episode, so the command below works immediately after installation:
 
 ```bash
 render_hdf5_replay \
-  --dataset_file "$(pwd)/outputs/cube_box/run_001/episodes.hdf5" \
+  --dataset_file "$(pwd)/examples/data/so101_cube_box_controller.hdf5" \
   --episode 0 \
-  --output "$(pwd)/outputs/cube_box/run_001/replay.mp4" \
-  --start_frame 0 \
+  --output "$(pwd)/outputs/cube_box/example_replay.mp4" \
+  --start_frame 443 \
   --frame_stride 20 \
   --fps 20 \
   --width 960 \
@@ -183,7 +183,13 @@ render_hdf5_replay \
   --viz none
 ```
 
-Use `--end_frame` to stop at a particular recorded action. Smaller `--frame_stride` values produce smoother, larger videos.
+The equivalent convenience script is:
+
+```bash
+./examples/replay_cube_box.sh
+```
+
+Pass an output path as its first argument if desired. Use `--end_frame` with the Python entry point to stop at a particular recorded action; smaller `--frame_stride` values produce smoother, larger videos.
 
 ### Gamepad: cloth demonstration collection
 
@@ -266,11 +272,13 @@ source/so101teleop/                 editable Python package
   sim_to_real_so101/tasks/          Gym/Isaac Lab task configurations
   sim_to_real_so101/scripts/        teleop, collection, expansion, training
   sim_to_real_so101/utils/          recorder, keyboard, gamepad interfaces
+examples/data/                       small versioned HDF5 replay example
+examples/replay_cube_box.sh          ready-to-run example replay command
 third_party/Sim-to-Real-SO-101-Workshop/  pinned upstream asset submodule
 docs/cloth_pipeline.md              cloth workflow reference
 ```
 
-Generated datasets, MP4 files, model checkpoints, logs, caches, and HDF5 files are ignored by Git. The compact README demo GIF is the only recorded media intentionally versioned.
+Generated datasets, MP4 files, model checkpoints, logs, caches, and HDF5 files are ignored by Git. The compact README demo GIF and the small HDF5 example under `examples/data/` are the only recorded artifacts intentionally versioned.
 
 ## Updating the upstream assets
 
